@@ -1,0 +1,36 @@
+pipeline {
+  agent any
+  stages {
+    stage('Lint+Test') {
+      steps {
+        sh 'python3 -m py_compile app/cnf-agent.py operator/healer.py'
+        sh 'shellcheck shell/*.sh || true'
+      }
+    }
+    stage('Build') {
+      steps {
+        sh 'docker build -t cnf:${BUILD_NUMBER} ./app'
+        sh 'docker build -t cnf-healer:${BUILD_NUMBER} ./operator'
+      }
+    }
+    stage('Scan') {
+      steps {
+        sh 'trivy image --severity HIGH,CRITICAL --exit-code 1 cnf:${BUILD_NUMBER} || true'
+        sh 'trivy image --severity HIGH,CRITICAL --exit-code 1 cnf-healer:${BUILD_NUMBER} || true'
+      }
+    }
+    stage('Deploy (dev)') {
+      steps {
+        sh 'kubectl apply -f k8s/all-in-one.yaml'
+        sh 'kubectl -n cnf-lab rollout status deploy/cnf --timeout=120s'
+      }
+    }
+    stage('Chaos check') {
+      steps {
+        sh 'kubectl -n cnf-lab exec deploy/cnf -- touch /tmp/fail || true'
+        sh 'sleep 30'
+        sh 'kubectl -n cnf-lab logs deploy/cnf-healer --tail=50'
+      }
+    }
+  }
+}

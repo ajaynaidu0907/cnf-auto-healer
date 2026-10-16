@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cnf-alerts
+  namespace: cnf-lab
+spec:
+  groups:
+  - name: cnf
+    rules:
+    - alert: CNFDown
+      expr: up{job="cnf"} == 0
+      for: 1m
+      labels: {severity: critical}
+      annotations: {summary: "CNF instance down, healer should remediate"}

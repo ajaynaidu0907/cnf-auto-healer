@@ -1,0 +1,19 @@
+- hosts: localhost
+  connection: local
+  tasks:
+    - name: Ensure kind cluster exists
+      ansible.builtin.shell: kind get clusters | grep -q cnf-lab || kind create cluster --name cnf-lab --config ../kind-config.yaml
+      args: {creates: /tmp/cnf-lab-ansible-done}
+      changed_when: false
+    - name: Build CNF image
+      ansible.builtin.shell: docker build -t cnf:local ../app
+    - name: Build healer image
+      ansible.builtin.shell: docker build -t cnf-healer:local ../operator
+    - name: Load images to kind
+      ansible.builtin.shell: kind load docker-image cnf:local cnf-healer:local --name cnf-lab
+    - name: Apply manifests
+      ansible.builtin.shell: kubectl apply -f ../k8s/all-in-one.yaml && kubectl apply -f ../policies/ || true
+    - name: Linux hardening hint (CIS-like)
+      ansible.builtin.shell: sysctl -w net.ipv4.ip_forward=1; echo "hardening placeholder for local lab"
+      become: false
+      failed_when: false
